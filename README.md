@@ -4,6 +4,8 @@ Chrome extension that overlays a live move-quality badge on lichess.org and ches
 **Brilliant / Great / Best / Excellent / Good / Book / Inaccuracy / Mistake / Blunder** —
 after every move, plus a colour strip of the whole game so far. Stockfish 16
 (NNUE, WebAssembly) runs locally inside the extension; nothing is sent anywhere.
+Moves that are still theory are named and graded **Book** against a database of
+3,328 openings rather than against the engine.
 
 Works on:
 
@@ -35,7 +37,8 @@ earlier moves.
 
 The panel shows a mini board with the graded move highlighted and its badge
 pinned to the destination square, an eval bar, the eval before → after, the
-win-chance lost, and the engine's preferred line when the move wasn't best.
+win-chance lost, the name of the opening being played, and the engine's
+preferred line when the move wasn't best.
 The strip at the bottom is one dot per move of the game — click any dot to
 review that move.
 
@@ -52,7 +55,7 @@ probability (lichess's formula) and the drop is measured from the mover's side:
 
 | Category   | Rule |
 |------------|------|
-| Book       | first 12 plies, near-equal, no real loss |
+| Book       | still following theory (see [Opening book](#opening-book)) |
 | Best       | engine's top move, or < 0.5 % lost |
 | Brilliant  | Best **and** a real sacrifice (piece left en prise / taken by a cheaper piece) in a position that wasn't already won |
 | Great      | Best **and** the only good move (second-best ≥ 10 % worse) |
@@ -65,6 +68,41 @@ probability (lichess's formula) and the drop is measured from the mover's side:
 
 Tweak thresholds in `overlay/classify.js`.
 
+## Opening book
+
+Grading a gambit purely on eval is wrong: 3. c3 in the Smith-Morra hands over a
+pawn, so the engine marks it down and it used to come out as an *Inaccuracy*.
+It is theory, and theory is what "Book" is supposed to mean.
+
+So the book is a real database — every position of all 3,328 named openings in
+[lichess-org/chess-openings](https://github.com/lichess-org/chess-openings)
+(CC0), 7,853 positions in total, from `1. Nh3` to twenty-ply main lines. A move
+is **Book** when:
+
+- the position it reaches is in the book, **and**
+- the game had not already left theory (otherwise shuffling a knight out and
+  back would transpose into a book position and re-enter book), **and**
+- it does not leave the mover worse than about −1.5 pawns — which keeps the
+  gambits but still lets a named-but-refuted line like the Damiano be graded
+  on its merits.
+
+Positions are keyed by structure (board, side to move, castling rights), not by
+move order, so lines that transpose into theory are recognised as theory.
+
+The opening's name is shown under the badge whatever the grade is, and stays on
+screen dimmed once the game leaves book.
+
+### Regenerating
+
+`overlay/book.js` is generated and checked in, so nothing is fetched at runtime:
+
+```
+node tools/build-book.mjs     # tools/eco/*.tsv -> overlay/book.js
+node tools/check-book.mjs     # coverage + grading checks, non-zero on failure
+```
+
+To pick up new openings, refresh the TSVs from upstream and rebuild.
+
 ## Layout
 
 ```
@@ -76,7 +114,12 @@ content.js             lichess/chess.com DOM scraping + iframe mounting + human-
 overlay/overlay.html   the panel (runs as an extension page inside an iframe)
 overlay/overlay.js     game state, engine scheduling, rendering
 overlay/engine.js      UCI wrapper around the Stockfish worker
-overlay/classify.js    win%-based classification
+overlay/classify.js    win%-based classification + the book rule
+overlay/book.js        generated opening book (position key -> ECO name)
+overlay/book-key.js    the position-keying used by the book, both sides of the build
+tools/build-book.mjs   rebuilds overlay/book.js from tools/eco/*.tsv
+tools/check-book.mjs   book coverage and grading checks
+tools/eco/             ECO tables from lichess-org/chess-openings (CC0)
 engine/                stockfish-nnue-16-single.{js,wasm} + NNUE net (40 MB)
 lib/chess.js           chess.js 1.4 (SAN parsing, legality, attackers)
 pieces/<set>/          SVG piece sets (see pieces/LICENSES.md)
@@ -95,4 +138,5 @@ window.postMessage({ type: "movegrade:moves", mode: "analysis", allowed: true, r
 ## Credits
 
 Stockfish (GPL-3.0) via stockfish.js, chess.js (BSD-2-Clause). See the LICENSE
-files in `engine/` and `lib/`.
+files in `engine/` and `lib/`. Opening names from
+[lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0-1.0).
