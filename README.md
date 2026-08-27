@@ -82,9 +82,13 @@ is **Book** when:
 - the position it reaches is in the book, **and**
 - the game had not already left theory (otherwise shuffling a knight out and
   back would transpose into a book position and re-enter book), **and**
-- it does not leave the mover worse than about −1.5 pawns — which keeps the
-  gambits but still lets a named-but-refuted line like the Damiano be graded
-  on its merits.
+- it does not leave the mover worse than about −1.5 pawns.
+
+That last threshold is what stops a name on a line from excusing everything
+played in it. A dubious opening keeps the badge while it is merely worse — the
+Damiano Defence, 2... f6, is about −0.85 and stays Book — and loses it at the
+point the mover is simply lost, which in the Damiano is 3... fxe5, a pawn down
+to 4. Qh5+ at about −2.3, graded a Mistake.
 
 Positions are keyed by structure (board, side to move, castling rights), not by
 move order, so lines that transpose into theory are recognised as theory.

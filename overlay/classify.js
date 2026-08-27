@@ -121,9 +121,12 @@ export function classify(before, after, fenBefore, san, ply) {
   //
   // A gambit is book even though it drops material — that is the whole point of
   // grading against theory rather than against the engine's eval, and it is why
-  // 3. c3 in the Smith-Morra reads "Book" and not "Inaccuracy". Lines that are
-  // named but genuinely refuted (the Damiano, say) still fall through to the
-  // eval-based grades once the mover is clearly worse for it.
+  // 3. c3 in the Smith-Morra reads "Book" and not "Inaccuracy".
+  //
+  // BOOK_MIN_CP is what stops that from excusing everything with a name on it.
+  // A named line keeps the badge while it is merely worse (2... f6, the Damiano
+  // Defence, is about -0.85 and stays book); it loses the badge at the point
+  // the mover is simply lost, which for the Damiano is 3... fxe5 at about -2.3.
   const inBook = opening && (ply === 0 || lookupOpening(fenBefore) !== null);
 
   let cat;

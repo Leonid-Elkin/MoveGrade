@@ -95,11 +95,18 @@ check(g.opening.startsWith("B21 Sicilian Defense: Smith-Morra Gambit"),
 g = grade({ pgn: "d4 Nf6 c4 g6 Nc3 d5 cxd5 Nxd5 e4 Nxc3 bxc3 Bg7 Nf3 c5 Rb1", cpBest: 40, cpAfter: 5 });
 check(g.cat === "book", `15.Rb1 Gruenfeld (ply 14) -> ${g.cat} (${g.opening})`);
 
-console.log("\nnamed but refuted lines are still graded on their merits:");
-// The Damiano is in ECO, but 2...f6 just loses; the mover ends up well worse.
-g = grade({ pgn: "e4 e5 Nf3 f6", cpBest: -20, cpAfter: -260 });
-check(g.cat !== "book", `2...f6 Damiano -> ${g.cat} (still named "${g.opening}")`);
-check(g.opening !== null, `  the name is reported anyway`);
+console.log("\nthe eval floor decides where a bad opening stops being theory:");
+// Evals here are what Stockfish actually returned at depth 14 for this line.
+// 2...f6 is dubious but only about -0.85, and it is a named opening, so it
+// keeps the badge.
+g = grade({ pgn: "e4 e5 Nf3 f6", cpBest: -20, cpAfter: -85 });
+check(g.cat === "book", `2...f6 Damiano Defence, -0.85 -> ${g.cat}`);
+
+// Accepting the gambit is what actually loses: a pawn down to 4.Qh5+, about
+// -2.3, past the floor, so it is graded on its merits instead.
+g = grade({ pgn: "e4 e5 Nf3 f6 Nxe5 fxe5", cpBest: -30, cpAfter: -227 });
+check(g.cat !== "book", `3...fxe5 Damiano Gambit accepted, -2.27 -> ${g.cat}`);
+check(g.opening !== null, `  still named "${g.opening}"`);
 
 console.log("\nshuffling back into a book position does not re-enter book:");
 // 4.Ng1 leaves theory; 4...Nb8 transposes back to the position after 3...Bc5.
