@@ -1,0 +1,6 @@
+# Kept out of the downloadable zip that tools/package.sh builds with
+# `git archive`: the extension itself is what people load, not the build inputs.
+tools/ export-ignore
+package.json export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
