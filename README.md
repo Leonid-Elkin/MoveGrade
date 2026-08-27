@@ -26,9 +26,25 @@ lichess's rules and will get an account flagged. The overlay shows
 
 ## Install (unpacked)
 
-1. Open `chrome://extensions`, turn on **Developer mode** (top right).
-2. Click **Load unpacked** and pick this folder (`Projects\movegrade`).
-3. Open any lichess game / analysis page. The panel appears top-right.
+**[Download MoveGrade.zip](https://github.com/Leonid-Elkin/MoveGrade/releases/latest/download/MoveGrade.zip)** — always the current release.
+
+1. Unzip it; you get a `MoveGrade` folder.
+2. Open `chrome://extensions`, turn on **Developer mode** (top right).
+3. Click **Load unpacked** and pick that `MoveGrade` folder.
+4. Open any lichess game / analysis page. The panel appears top-right.
+
+Cloning the repo works just as well — pick the checkout in step 3. Chrome keeps
+loading the folder from where it is, so do not delete it afterwards.
+
+To cut a new release, bump `version` in `manifest.json`, then:
+
+```
+sh tools/package.sh
+gh release create v<version> dist/MoveGrade.zip
+```
+
+The asset has to keep the name `MoveGrade.zip` for the download link above to
+go on working.
 
 The toolbar icon shows/hides the panel. Drag it by its title bar; the position
 is remembered. ⚙ opens settings: search depth (4–24), piece set (cburnett /
