@@ -2,6 +2,7 @@ import { Chess } from "../lib/chess.js";
 import { Engine } from "./engine.js";
 import { RemoteEngine } from "./remote-engine.js";
 import { classify, CATEGORIES, fmtEval, lineToCp, winPct } from "./classify.js";
+import { lookupOpening } from "./book.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -9,7 +10,7 @@ const els = {
   move: $("move"), evalBefore: $("evalBefore"), evalAfter: $("evalAfter"),
   detail: $("detail"), bestline: $("bestline"), history: $("history"),
   opening: $("opening"),
-  settings: $("settings"), depth: $("depth"), depthVal: $("depthVal"),
+  settings: $("settings"), think: $("think"), thinkVal: $("thinkVal"),
   backfill: $("backfill"), showBoard: $("showBoard"), pieceSet: $("pieceSet"),
   boardTheme: $("boardTheme"), board: $("board"), boardWrap: $("boardWrap"),
   evalbar: $("evalbar"), evalfill: $("evalfill"), evaltext: $("evaltext"),
@@ -26,7 +27,9 @@ const storage = isExt
 const assetUrl = (p) => (isExt ? chrome.runtime.getURL(p) : new URL("../" + p, location.href).href);
 
 // ----------------------------------------------------------------- settings
-const settings = { depth: 14, backfill: true, showBoard: true, pieceSet: "cburnett", boardTheme: "green" };
+const settings = { thinkMs: 1000, backfill: true, showBoard: true, pieceSet: "cburnett", boardTheme: "green" };
+
+const fmtSecs = (ms) => (ms / 1000).toFixed(1) + "s";
 
 for (const s of PIECE_SETS) {
   const o = document.createElement("option");
@@ -36,8 +39,8 @@ for (const s of PIECE_SETS) {
 }
 
 function applySettingsToUi() {
-  els.depth.value = settings.depth;
-  els.depthVal.textContent = settings.depth;
+  els.think.value = settings.thinkMs;
+  els.thinkVal.textContent = fmtSecs(settings.thinkMs);
   els.backfill.checked = settings.backfill;
   els.showBoard.checked = settings.showBoard;
   els.pieceSet.value = settings.pieceSet;
@@ -56,7 +59,7 @@ function saveSetting(k, v) {
   settings[k] = v;
   storage.set({ [k]: v });
 }
-els.depth.addEventListener("input", () => { saveSetting("depth", +els.depth.value); els.depthVal.textContent = settings.depth; });
+els.think.addEventListener("input", () => { saveSetting("thinkMs", +els.think.value); els.thinkVal.textContent = fmtSecs(settings.thinkMs); });
 els.backfill.addEventListener("change", () => saveSetting("backfill", els.backfill.checked));
 els.showBoard.addEventListener("change", () => { saveSetting("showBoard", els.showBoard.checked); applySettingsToUi(); reportHeight(); });
 els.pieceSet.addEventListener("change", () => { saveSetting("pieceSet", els.pieceSet.value); renderCurrent(); });
@@ -164,7 +167,7 @@ engine.readyPromise.then(() => setStatus("engine ready")).catch(() => {});
 // The first grade is shown as soon as both positions have been searched to
 // this depth; every deeper iteration up to the user's selected depth then
 // re-grades and updates the badge. Nothing is searched beyond the selected depth.
-const FIRST_GRADE_DEPTH = 4;
+const QUICK_MS = 150;
 
 // ----------------------------------------------------------------- game state
 let sans = [];            // current mainline
@@ -200,25 +203,51 @@ function rebuild(newSans) {
  * Analyse `fen` to at least `depth`. Cached results shallower than `depth`
  * are re-searched. `onPartial(snapshot)` fires after each completed depth.
  */
-async function analyseFen(fen, gen, depth, onPartial) {
+async function analyseFen(fen, gen, ms, onPartial) {
   const cached = evalCache.get(fen);
-  if (cached && (cached.terminal || cached.depth >= depth)) return cached;
+  if (cached && (cached.terminal || (cached.ms || 0) >= ms)) return cached;
   const chess = new Chess(fen);
   if (chess.isGameOver()) {
-    const r = { bestMove: null, lines: [], depth: 0, terminal: true };
+    const r = { bestMove: null, lines: [], depth: 0, ms, terminal: true };
     evalCache.set(fen, r);
     return r;
   }
   try { await engine.readyPromise; } catch { return null; }
-  const r = await engine.analyse(fen, depth, (snap) => {
+  const r = await engine.analyse(fen, ms, (snap) => {
     if (gen !== generation) return;
-    setStatus(`depth ${snap.depth}/${depth}`);
-    if (onPartial && snap.depth >= FIRST_GRADE_DEPTH) onPartial(snap);
+    setStatus(`${fmtSecs(Math.min(snap.elapsed, ms))} / ${fmtSecs(ms)} · depth ${snap.depth}`);
+    if (onPartial) onPartial(snap);
   });
-  if (r && r.lines.length && r.depth >= Math.min(depth, FIRST_GRADE_DEPTH) && (!cached || r.depth > cached.depth)) {
+  // a longer think supersedes a shorter one; an interrupted search does not
+  if (r && r.lines.length && (!cached || (r.ms || 0) >= (cached.ms || 0))) {
     evalCache.set(fen, r);
   }
   return r && r.lines.length ? r : (cached || null);
+}
+
+/**
+ * A move both of whose positions are named theory, before the engine has said
+ * anything. Book is the one grade that needs no search, and that is the point:
+ * 1.e4 should never spend a third of a second labelled an inaccuracy while a
+ * shallow search catches up.
+ */
+function isBookMove(i) {
+  if (fens[i + 1] === undefined) return false;
+  return !!lookupOpening(fens[i + 1]) && (i === 0 || !!lookupOpening(fens[i]));
+}
+
+function bookGrade(i) {
+  const chess = new Chess(fens[i]);
+  let move = null;
+  try { move = chess.move(sans[i]); } catch { /* unparsable: leave it */ }
+  const empty = { bestMove: null, lines: [], depth: 0, ms: 0 };
+  return {
+    cat: "book", loss: 0, move, san: sans[i], ply: i,
+    before: empty, after: empty,
+    cpBest: 0, cpAfter: 0, isEngineBest: false,
+    opening: lookupOpening(fens[i + 1]),
+    depth: 0, provisional: true, fromBook: true,
+  };
 }
 
 function buildGrade(i, before, after, provisional) {
@@ -240,23 +269,34 @@ function isShown(i) {
  * Grade ply i to `depth`. When `live` is set the badge updates after every
  * completed depth so a provisional grade appears within a second or so.
  */
-async function gradePly(i, gen, depth, live) {
+async function gradePly(i, gen, ms, live) {
   const existing = grades[i];
-  if (existing && !existing.provisional && existing.depth >= depth) return existing;
+  if (existing && !existing.provisional && (existing.ms || 0) >= ms) return existing;
+
+  // Theory first, and without waiting for the engine at all: a move that
+  // reaches a named position is named straight away rather than after a
+  // shallow search has had a chance to call 1.e4 an inaccuracy. classify()
+  // still runs behind this and still has the last word - a named line that
+  // leaves the mover simply lost loses the badge on the next render.
+  if (live && !existing && isBookMove(i)) {
+    grades[i] = bookGrade(i);
+    if (isShown(i)) renderCurrent();
+    renderHistory();
+  }
 
   // Quick pass: get both positions to FIRST_GRADE_DEPTH so a grade shows
   // right away, before the (much longer) full-depth search starts.
-  if (live && depth > FIRST_GRADE_DEPTH && !(existing && existing.depth >= FIRST_GRADE_DEPTH)) {
-    const b0 = await analyseFen(fens[i], gen, FIRST_GRADE_DEPTH, null);
+  if (live && ms > QUICK_MS && !(existing && (existing.ms || 0) >= QUICK_MS)) {
+    const b0 = await analyseFen(fens[i], gen, QUICK_MS, null);
     if (!b0 || gen !== generation) return null;
-    const a0 = await analyseFen(fens[i + 1], gen, FIRST_GRADE_DEPTH, null);
+    const a0 = await analyseFen(fens[i + 1], gen, QUICK_MS, null);
     if (!a0 || gen !== generation) return null;
     grades[i] = buildGrade(i, b0, a0, true);
     if (isShown(i)) renderCurrent();
     renderHistory();
   }
 
-  const before = await analyseFen(fens[i], gen, depth, live ? (snap) => {
+  const before = await analyseFen(fens[i], gen, ms, live ? (snap) => {
     // "before" is usually cached (it was the previous "after"); if not, grade
     // provisionally against whatever we have for "after" so far.
     const aft = evalCache.get(fens[i + 1]);
@@ -264,7 +304,7 @@ async function gradePly(i, gen, depth, live) {
   } : null);
   if (!before || gen !== generation) return null;
 
-  const after = await analyseFen(fens[i + 1], gen, depth, live ? (snap) => {
+  const after = await analyseFen(fens[i + 1], gen, ms, live ? (snap) => {
     if (gen !== generation) return;
     grades[i] = buildGrade(i, before, snap, true);
     if (isShown(i)) renderCurrent();
@@ -273,6 +313,7 @@ async function gradePly(i, gen, depth, live) {
   if (!after || gen !== generation) return null;
 
   const g = buildGrade(i, before, after, false);
+  g.ms = ms;
   grades[i] = g;
   return g;
 }
@@ -290,7 +331,7 @@ async function run() {
   const last = sans.length - 1;
 
   // 1. latest move, progressively, to the configured depth
-  const g = await gradePly(last, gen, settings.depth, true);
+  const g = await gradePly(last, gen, settings.thinkMs, true);
   if (gen !== generation) return;
   if (g) renderCurrent();
   renderHistory();
@@ -301,14 +342,14 @@ async function run() {
       if (gen !== generation) return;
       if (grades[i] && !grades[i].provisional) continue;
       setStatus(`grading earlier moves… (${i + 1}/${sans.length})`);
-      await gradePly(i, gen, settings.depth, false);
+      await gradePly(i, gen, settings.thinkMs, false);
       if (gen !== generation) return;
       renderHistory();
       if (selected === i) renderCurrent();
     }
   }
 
-  setStatus(`depth ${g ? g.depth : "?"} · waiting for next move`);
+  setStatus(`depth ${g ? g.depth : "?"} in ${fmtSecs(settings.thinkMs)} · waiting for next move`);
 }
 
 // ----------------------------------------------------------------- rendering
@@ -420,7 +461,8 @@ function renderGrade(g) {
   const bits = [];
   if (g.loss > 0.05) bits.push(`−${g.loss.toFixed(1)}% win chance`);
   if (g.isEngineBest) bits.push("engine's top choice");
-  bits.push(`depth ${g.depth}${g.provisional ? "…" : ""}`);
+  if (g.fromBook) bits.push("opening book…");
+  else bits.push(`depth ${g.depth}${g.provisional ? "…" : ""}`);
   els.detail.textContent = bits.join(" · ");
 
   if (!g.isEngineBest && g.before.lines[0] && g.cat !== "mate" && g.cat !== "book") {

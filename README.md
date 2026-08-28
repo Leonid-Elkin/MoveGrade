@@ -1,7 +1,7 @@
 # MoveGrade
 
 Chrome extension that overlays a live move-quality badge on lichess.org and chess.com —
-**Brilliant / Great / Best / Excellent / Good / Book / Inaccuracy / Mistake / Blunder** —
+**Brilliant / Great / Best / Excellent / Good / Book / Forced / Inaccuracy / Miss / Mistake / Blunder** —
 after every move, plus a colour strip of the whole game so far. Stockfish 16
 (NNUE, WebAssembly) runs locally inside the extension; nothing is sent anywhere.
 Moves that are still theory are named and graded **Book** against a database of
@@ -47,7 +47,7 @@ The asset has to keep the name `MoveGrade.zip` for the download link above to
 go on working.
 
 The toolbar icon shows/hides the panel. Drag it by its title bar; the position
-is remembered. ⚙ opens settings: search depth (4–24), piece set (cburnett /
+is remembered. ⚙ opens settings: think time (0.2–5s), piece set (cburnett /
 merida / alpha), board colours, mini-board on/off, background grading of
 earlier moves.
 
@@ -80,9 +80,23 @@ probability (lichess's formula) and the drop is measured from the mover's side:
 | Inaccuracy | < 10 % lost |
 | Mistake    | < 20 % lost |
 | Blunder    | ≥ 20 % lost |
+| Miss       | a mate or a won position was there and the move does not keep it; shown instead of Mistake or Blunder |
+| Forced     | only one legal move, so there is nothing to grade |
 | Checkmate  | the move mates |
 
-Tweak thresholds in `overlay/classify.js`.
+Thresholds are chess.com's published Expected Points bands rather than numbers
+invented here; `overlay/classify.js` cites the source. Tweak them there.
+
+Searches are bounded by time, not depth (`go movetime`). A fixed depth costs
+whatever the position happens to cost — instant in a bare ending, many seconds
+in a sharp middlegame — so the badge arrived whenever it liked and the slider's
+number meant nothing a player could feel. Every move now gets the same wall
+clock (1s by default) and the engine goes as deep as the position allows.
+
+A move that reaches a named position is graded from the book *before the engine
+is asked anything*, so 1.e4 never spends a moment labelled an inaccuracy while a
+shallow search catches up. The engine still runs behind it and still has the
+last word.
 
 ## Opening book
 
