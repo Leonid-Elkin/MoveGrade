@@ -35,9 +35,10 @@
   const CAT_COLORS = {
     brilliant: "#26c2a3", great: "#5c8bb0", best: "#81b64c", excellent: "#96bc4b",
     good: "#95b776", book: "#a88865", inaccuracy: "#f7c631", mistake: "#ffa459",
-    blunder: "#fa412d", mate: "#e8e8e8", none: "#4a4744",
+    miss: "#ff7769", forced: "#9c9c9c", blunder: "#fa412d",
+    mate: "#e8e8e8", none: "#4a4744",
   };
-  const DARK_TEXT = new Set(["inaccuracy", "mate"]);
+  const DARK_TEXT = new Set(["inaccuracy", "mate", "forced"]);
   let badge = null;
 
   /** The site's 8x8 board element and which colour sits at the bottom. */

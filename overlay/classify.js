@@ -1,7 +1,20 @@
 // Move classification: turns "eval before" / "eval after" into a badge.
 //
-// Win-probability model is lichess's (win% = 50 + 50 * (2 / (1 + e^(-0.00368208 * cp)) - 1)).
-// Thresholds are between lichess (lenient) and chess.com (strict).
+// Two published systems are copied here rather than invented:
+//
+// 1. The win-probability model is lichess's, from https://lichess.org/page/accuracy
+//        Win% = 50 + 50 * (2 / (1 + exp(-0.00368208 * centipawns)) - 1)
+//    Everything below is measured as win% lost by the side that moved - a
+//    1-pawn error in a dead-drawn endgame and the same pawn when you are
+//    already up a queen are not the same mistake.
+//
+// 2. The thresholds are chess.com's "Expected Points" bands, from
+//    https://support.chess.com/en/articles/8572705-how-are-moves-classified-what-is-a-blunder-or-brilliant-etc
+//        Excellent 0.00-0.02, Good 0.02-0.05, Inaccuracy 0.05-0.10,
+//        Mistake 0.10-0.20, Blunder 0.20-1.00
+//    Expected points run 0-1, so 0.02 expected points is 2 win% points here.
+//    lichess grades far more leniently (10/20/30%); we follow chess.com
+//    because that is the scale players recognise.
 
 import { Chess } from "../lib/chess.js";
 import { lookupOpening } from "./book.js";
@@ -13,6 +26,17 @@ const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 // but refuted line is graded on its merits instead.
 const BOOK_MIN_CP = -150;
 
+// Win% lost, i.e. chess.com's expected-points bands x100.
+const T_EXCELLENT = 2;
+const T_GOOD = 5;
+const T_INACCURACY = 10;
+const T_MISTAKE = 20;
+
+// A Miss is a Mistake or Blunder that specifically threw away a win: the mover
+// stood at WINNING and no longer stands at STILL_WINNING.
+const WINNING = 75;
+const STILL_WINNING = 60;
+
 export const CATEGORIES = {
   brilliant:  { label: "Brilliant",  glyph: "!!" },
   great:      { label: "Great",      glyph: "!"  },
@@ -20,7 +44,9 @@ export const CATEGORIES = {
   excellent:  { label: "Excellent",  glyph: "✓"  },
   good:       { label: "Good",       glyph: "✓"  },
   book:       { label: "Book",       glyph: "📖" },
+  forced:     { label: "Forced",     glyph: "→"  },
   inaccuracy: { label: "Inaccuracy", glyph: "?!" },
+  miss:       { label: "Miss",       glyph: "✗"  },
   mistake:    { label: "Mistake",    glyph: "?"  },
   blunder:    { label: "Blunder",    glyph: "??" },
   mate:       { label: "Checkmate",  glyph: "#"  },
@@ -89,6 +115,7 @@ function isSacrifice(after, move) {
  */
 export function classify(before, after, fenBefore, san, ply) {
   const chess = new Chess(fenBefore);
+  const legalMoves = chess.moves().length;
   let move = null;
   try { move = chess.move(san); } catch { /* illegal / unparsable */ }
   if (!move) return { cat: "none", loss: 0, opening: null };
@@ -111,9 +138,14 @@ export function classify(before, after, fenBefore, san, ply) {
 
   const wBest = winPct(cpBest);
   const wAfter = winPct(cpAfter);
-  const loss = Math.max(0, wBest - wAfter);
   const uci = move.from + move.to + (move.promotion || "");
   const isEngineBest = before.bestMove === uci;
+
+  // The before- and after-positions are searched separately, so their scores
+  // disagree by a few centipawns even for the engine's own top move, and the
+  // panel would say "Best - 3.0% lost" about the move the engine asked for.
+  // That move loses nothing by definition.
+  const loss = isEngineBest ? 0 : Math.max(0, wBest - wAfter);
 
   // In book: the move reaches a named theoretical position and the game has not
   // left theory on the way there (without that second test a pointless shuffle
@@ -129,8 +161,14 @@ export function classify(before, after, fenBefore, san, ply) {
   // the mover is simply lost, which for the Damiano is 3... fxe5 at about -2.3.
   const inBook = opening && (ply === 0 || lookupOpening(fenBefore) !== null);
 
+  // Nothing to grade when there was no choice. Checked before the book so a
+  // forced recapture inside theory reads as forced rather than as approval.
+  const hadMate = bestLine.mate !== null && bestLine.mate !== undefined && bestLine.mate > 0;
+
   let cat;
-  if (inBook && cpAfter > BOOK_MIN_CP) {
+  if (legalMoves === 1) {
+    cat = "forced";
+  } else if (inBook && cpAfter > BOOK_MIN_CP) {
     cat = "book";
   } else if (isEngineBest || loss < 0.5) {
     cat = "best";
@@ -138,11 +176,16 @@ export function classify(before, after, fenBefore, san, ply) {
     const notCrushing = cpBest < 500 && cpBest > -300;
     if (notCrushing && cpAfter > -60 && isSacrifice(chess, move)) cat = "brilliant";
     else if (onlyMove && notCrushing) cat = "great";
-  } else if (loss < 2) cat = "excellent";
-  else if (loss < 5) cat = "good";
-  else if (loss < 10) cat = "inaccuracy";
-  else if (loss < 20) cat = "mistake";
+  } else if (loss >= T_GOOD && (hadMate || wBest >= WINNING) && wAfter < STILL_WINNING) {
+    // A win was there and the move does not keep it. Named for the chance
+    // rather than for the size of the drop, so it replaces Mistake/Blunder.
+    cat = "miss";
+  } else if (loss < T_EXCELLENT) cat = "excellent";
+  else if (loss < T_GOOD) cat = "good";
+  else if (loss < T_INACCURACY) cat = "inaccuracy";
+  else if (loss < T_MISTAKE) cat = "mistake";
   else cat = "blunder";
 
+  if (cat === "forced") return { cat, loss: 0, move, cpBest, cpAfter, isEngineBest, opening };
   return { cat, loss, move, cpBest, cpAfter, isEngineBest, opening };
 }
