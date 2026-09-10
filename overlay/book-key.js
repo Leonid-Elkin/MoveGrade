@@ -9,7 +9,7 @@
  * that arrive at the same position by a different move order share one key.
  *
  * Two 32-bit hashes (FNV-1a and djb2) are concatenated in base 36, giving a
- * 64-bit key — collisions across the ~30k book positions are negligible.
+ * 64-bit key. Collisions across the ~30k book positions are negligible.
  */
 export function bookKey(fen) {
   const f = fen.split(" ");

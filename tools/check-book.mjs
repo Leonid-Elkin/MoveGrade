@@ -44,7 +44,7 @@ for (const [label, pgn] of Object.entries(LINES)) {
     if (!lookupOpening(chess.fen())) break;
     depth++;
   }
-  check(depth === sans.length, `${label} — ${depth}/${sans.length} plies in book`);
+  check(depth === sans.length, `${label}: ${depth}/${sans.length} plies in book`);
 }
 
 console.log("\nnames resolve to the real variation:");

@@ -1,8 +1,8 @@
 # MoveGrade
 
-Chrome extension that overlays a live move-quality badge on lichess.org and chess.com —
-**Brilliant / Great / Best / Excellent / Good / Book / Forced / Inaccuracy / Miss / Mistake / Blunder** —
-after every move, plus a colour strip of the whole game so far. Stockfish 16
+Chrome extension for lichess.org and chess.com. After every move it overlays a live
+move-quality badge, **Brilliant / Great / Best / Excellent / Good / Book / Forced /
+Inaccuracy / Miss / Mistake / Blunder**, plus a colour strip of the whole game so far. Stockfish 16
 (NNUE, WebAssembly) runs locally inside the extension; nothing is sent anywhere.
 Moves that are still theory are named and graded **Book** against a database of
 3,328 openings rather than against the engine.
@@ -20,20 +20,20 @@ nodes (scoped to `wc-move-list` on chess.com) and uses the `.selected` /
 `.active` / `.a1t` marker for the current move.
 
 It deliberately stays paused during a live game you are playing against a human
-opponent — real-time engine feedback there counts as engine assistance under
+opponent. Real-time engine feedback there counts as engine assistance under
 lichess's rules and will get an account flagged. The overlay shows
 "Paused: live game vs human" instead and resumes once the game is over.
 
 ## Install (unpacked)
 
-**[Download MoveGrade.zip](https://github.com/Leonid-Elkin/MoveGrade/releases/latest/download/MoveGrade.zip)** — always the current release.
+**[Download MoveGrade.zip](https://github.com/Leonid-Elkin/MoveGrade/releases/latest/download/MoveGrade.zip)**, always the current release.
 
 1. Unzip it; you get a `MoveGrade` folder.
 2. Open `chrome://extensions`, turn on **Developer mode** (top right).
 3. Click **Load unpacked** and pick that `MoveGrade` folder.
 4. Open any lichess game / analysis page. The panel appears top-right.
 
-Cloning the repo works just as well — pick the checkout in step 3. Chrome keeps
+Cloning the repo works just as well: pick the checkout in step 3. Chrome keeps
 loading the folder from where it is, so do not delete it afterwards.
 
 To cut a new release, bump `version` in `manifest.json`, then:
@@ -55,7 +55,7 @@ The panel shows a mini board with the graded move highlighted and its badge
 pinned to the destination square, an eval bar, the eval before → after, the
 win-chance lost, the name of the opening being played, and the engine's
 preferred line when the move wasn't best.
-The strip at the bottom is one dot per move of the game — click any dot to
+The strip at the bottom is one dot per move of the game. Click any dot to
 review that move.
 
 **On-board badge.** The badge is also drawn directly on the site's board, on
@@ -88,8 +88,8 @@ Thresholds are chess.com's published Expected Points bands rather than numbers
 invented here; `overlay/classify.js` cites the source. Tweak them there.
 
 Searches are bounded by time, not depth (`go movetime`). A fixed depth costs
-whatever the position happens to cost — instant in a bare ending, many seconds
-in a sharp middlegame — so the badge arrived whenever it liked and the slider's
+whatever the position happens to cost – instant in a bare ending, many seconds
+in a sharp middlegame – so the badge arrived whenever it liked and the slider's
 number meant nothing a player could feel. Every move now gets the same wall
 clock (1s by default) and the engine goes as deep as the position allows.
 
@@ -104,7 +104,7 @@ Grading a gambit purely on eval is wrong: 3. c3 in the Smith-Morra hands over a
 pawn, so the engine marks it down and it used to come out as an *Inaccuracy*.
 It is theory, and theory is what "Book" is supposed to mean.
 
-So the book is a real database — every position of all 3,328 named openings in
+So the book is a real database: every position of all 3,328 named openings in
 [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings)
 (CC0), 7,853 positions in total, from `1. Nh3` to twenty-ply main lines. A move
 is **Book** when:
@@ -115,8 +115,8 @@ is **Book** when:
 - it does not leave the mover worse than about −1.5 pawns.
 
 That last threshold is what stops a name on a line from excusing everything
-played in it. A dubious opening keeps the badge while it is merely worse — the
-Damiano Defence, 2... f6, is about −0.85 and stays Book — and loses it at the
+played in it. A dubious opening keeps the badge while it is merely worse – the
+Damiano Defence, 2... f6, is about −0.85 and stays Book – and loses it at the
 point the mover is simply lost, which in the Damiano is 3... fxe5, a pawn down
 to 4. Qh5+ at about −2.3, graded a Mistake.
 
