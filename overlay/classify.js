@@ -50,7 +50,7 @@ export const CATEGORIES = {
   mistake:    { label: "Mistake",    glyph: "?"  },
   blunder:    { label: "Blunder",    glyph: "??" },
   mate:       { label: "Checkmate",  glyph: "#"  },
-  none:       { label: "—",          glyph: "·"  },
+  none:       { label: "–",          glyph: "·"  },
 };
 
 /** Convert a UCI score line into centipawns (mate mapped far outside cp range). */
@@ -151,7 +151,7 @@ export function classify(before, after, fenBefore, san, ply) {
   // left theory on the way there (without that second test a pointless shuffle
   // that transposes back into a book position would read as book again).
   //
-  // A gambit is book even though it drops material — that is the whole point of
+  // A gambit is book even though it drops material. That is the whole point of
   // grading against theory rather than against the engine's eval, and it is why
   // 3. c3 in the Smith-Morra reads "Book" and not "Inaccuracy".
   //

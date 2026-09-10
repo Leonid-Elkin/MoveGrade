@@ -502,7 +502,7 @@ function renderCurrent() {
 function showIdle(text, status) {
   setCat("none");
   els.label.textContent = text;
-  els.move.textContent = "—";
+  els.move.textContent = "–";
   els.evalBefore.textContent = "·";
   els.evalAfter.textContent = "·";
   els.detail.textContent = "";
